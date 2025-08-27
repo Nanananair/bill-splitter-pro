@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bill Splitting Calculator</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f7fa;
+      }
+      .container {
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #2c3e50;
+        text-align: center;
+        margin-bottom: 30px;
+      }
+      .input-section {
+        margin-bottom: 30px;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+      }
+      .input-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+        align-items: center;
+      }
+      input[type="text"],
+      input[type="number"] {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+      input[type="text"] {
+        width: 200px;
+      }
+      input[type="number"] {
+        width: 80px;
+      }
+      .quantity-input {
+        width: 50px;
+        text-align: center;
+      }
+      button {
+        background-color: #3498db;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        margin: 5px;
+      }
+      button:hover {
+        background-color: #2980b9;
+      }
+      .add-btn {
+        background-color: #27ae60;
+      }
+      .add-btn:hover {
+        background-color: #229954;
+      }
+      .remove-btn {
+        background-color: #e74c3c;
+        padding: 5px 10px;
+        font-size: 12px;
+      }
+      .remove-btn:hover {
+        background-color: #c0392b;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+        background: white;
+      }
+      th,
+      td {
+        padding: 10px;
+        text-align: left;
+        border: 1px solid #ddd;
+        font-size: 14px;
+      }
+      th {
+        background-color: #34495e;
+        color: white;
+        font-weight: 600;
+      }
+      .person-header {
+        background-color: #3498db !important;
+        color: white;
+        text-align: center;
+        min-width: 100px;
+      }
+      .item-row {
+        background-color: #f9f9f9;
+      }
+      .item-row:nth-child(even) {
+        background-color: #ffffff;
+      }
+      .total-row {
+        background-color: #2c3e50;
+        color: white;
+        font-weight: bold;
+      }
+      .cost-cell {
+        text-align: right;
+        font-weight: bold;
+        color: #27ae60;
+      }
+      .quantity-cell {
+        text-align: center;
+      }
+      .summary {
+        margin-top: 30px;
+        padding: 20px;
+        background-color: #ecf0f1;
+        border-radius: 8px;
+      }
+      .summary h3 {
+        color: #2c3e50;
+        margin-top: 0;
+      }
+      .person-total {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #bdc3c7;
+      }
+      .person-total:last-child {
+        border-bottom: none;
+        font-weight: bold;
+        font-size: 16px;
+      }
+      .grand-total {
+        text-align: center;
+        font-size: 18px;
+        font-weight: bold;
+        color: #2c3e50;
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 2px solid #34495e;
+      }
+      .instructions {
+        background-color: #d5f4e6;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border-left: 4px solid #27ae60;
+      }
+      .instructions h4 {
+        margin-top: 0;
+        color: #27ae60;
+      }
+      .instructions ul {
+        margin-bottom: 0;
+      }
+      .breakdown {
+        margin-top: 20px;
+        padding: 15px;
+        background-color: #fff3cd;
+        border-radius: 8px;
+        border-left: 4px solid #ffc107;
+      }
+      .breakdown h4 {
+        color: #856404;
+        margin-top: 0;
+      }
+      .breakdown-item {
+        margin: 5px 0;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>💰 Bill Splitting Calculator (with Quantities)</h1>
+
+      <div class="instructions">
+        <h4>How to use:</h4>
+        <ul>
+          <li>Add people using the form below</li>
+          <li>
+            Add items with their <strong>unit price</strong> (price per piece)
+          </li>
+          <li>
+            Enter the quantity each person had (decimals allowed: 0.5, 0.33,
+            etc.)
+          </li>
+          <li>
+            For <strong>individual items</strong>: Enter unit price and
+            quantities
+          </li>
+          <li>
+            For <strong>shared items</strong> (tax, service charge, shared
+            appetizer): Check "shared item" box and enter total amount
+          </li>
+          <li>
+            Shared items are automatically split equally, but you can uncheck
+            people to exclude them (e.g., vegetarians from non-veg dishes)
+          </li>
+          <li>
+            Perfect for situations like: "I had 0.5 dessert, Alice had 1 beer,
+            we split tax equally, but vegetarian friend doesn't pay for chicken"
+          </li>
+        </ul>
+      </div>
+
+      <div class="input-section">
+        <h3>Add People</h3>
+        <div class="input-row">
+          <input
+            type="text"
+            id="personName"
+            placeholder="Enter person's name"
+          />
+          <button onclick="addPerson()" class="add-btn">Add Person</button>
+          <button onclick="clearAll()" class="remove-btn">
+            Clear All Data
+          </button>
+        </div>
+      </div>
+
+      <div class="input-section">
+        <h3>Add Items</h3>
+        <div class="input-row">
+          <input
+            type="text"
+            id="itemName"
+            placeholder="Item name (e.g., Beer or Tax)"
+          />
+          <input
+            type="number"
+            id="itemPrice"
+            placeholder="Price per unit or total amount"
+            step="0.01"
+            min="0"
+          />
+          <label
+            ><input type="checkbox" id="isShared" /> Shared item (split
+            equally)</label
+          >
+          <button onclick="addItem()" class="add-btn">Add Item</button>
+        </div>
+        <small
+          >💡 For individual items: Enter price per unit. For shared items (tax,
+          service charge, shared appetizer): Check the box and enter total
+          amount. Decimal quantities allowed (0.5, 0.33, etc.)</small
+        >
+      </div>
+
+      <div id="billTable"></div>
+
+      <div class="summary" id="summary" style="display: none">
+        <h3>💵 Who Owes What</h3>
+        <div id="summaryContent"></div>
+        <div class="breakdown" id="breakdown"></div>
+      </div>
+    </div>
+
+    <script>
+      let people = []
+      let items = []
+
+      function addPerson() {
+        const name = document.getElementById("personName").value.trim()
+        if (name && !people.includes(name)) {
+          people.push(name)
+          document.getElementById("personName").value = ""
+          updateTable()
+        } else if (people.includes(name)) {
+          alert("Person already added!")
+        }
+      }
+
+      function removePerson(name) {
+        people = people.filter((p) => p !== name)
+        // Remove person from all items
+        items.forEach((item) => {
+          delete item.quantities[name]
+        })
+        updateTable()
+      }
+
+      function addItem() {
+        const name = document.getElementById("itemName").value.trim()
+        const price = parseFloat(document.getElementById("itemPrice").value)
+        const isShared = document.getElementById("isShared").checked
+
+        if (name && !isNaN(price) && price > 0) {
+          const quantities = {}
+
+          if (isShared) {
+            // For shared items, everyone gets equal share (1 unit each)
+            people.forEach((person) => {
+              quantities[person] = 1
+            })
+          } else {
+            // For individual items, start with 0 for everyone
+            people.forEach((person) => {
+              quantities[person] = 0
+            })
+          }
+
+          items.push({
+            name: name,
+            unitPrice: price,
+            quantities: quantities,
+            isShared: isShared,
+          })
+          document.getElementById("itemName").value = ""
+          document.getElementById("itemPrice").value = ""
+          document.getElementById("isShared").checked = false
+          updateTable()
+        }
+      }
+
+      function removeItem(index) {
+        items.splice(index, 1)
+        updateTable()
+      }
+
+      function clearAll() {
+        if (
+          confirm(
+            "Are you sure you want to clear all data? This cannot be undone."
+          )
+        ) {
+          people = []
+          items = []
+          updateTable()
+        }
+      }
+
+      function updateQuantity(itemIndex, person, quantity) {
+        const item = items[itemIndex]
+        if (item.isShared) {
+          // Don't allow editing shared items directly
+          return
+        }
+        const qty = parseFloat(quantity) || 0
+        item.quantities[person] = Math.max(0, qty)
+        updateTable()
+      }
+
+      function toggleSharedItem(itemIndex, person, isIncluded) {
+        const item = items[itemIndex]
+        if (item.isShared) {
+          item.quantities[person] = isIncluded ? 1 : 0
+          updateTable()
+        }
+      }
+
+      function updateTable() {
+        if (people.length === 0) {
+          document.getElementById("billTable").innerHTML =
+            "<p>Add people first to get started!</p>"
+          document.getElementById("summary").style.display = "none"
+          return
+        }
+
+        let html = "<table><thead><tr>"
+        html += "<th>Item</th><th>Unit Price / Total</th>"
+        people.forEach((person) => {
+          html += `<th class="person-header">${person} <button onclick="removePerson('${person}')" class="remove-btn">✕</button><br><small>Quantity</small></th>`
+        })
+        html += "<th>Total Cost</th></tr></thead><tbody>"
+
+        items.forEach((item, index) => {
+          html += `<tr class="item-row">`
+          const itemLabel = item.isShared ? `${item.name} 🔄` : item.name
+          html += `<td>${itemLabel} <button onclick="removeItem(${index})" class="remove-btn">✕</button></td>`
+
+          if (item.isShared) {
+            const perPersonCost = item.unitPrice / people.length
+            const includedCount = people.filter(
+              (p) => (item.quantities[p] || 0) > 0
+            ).length
+            const actualPerPersonCost =
+              includedCount > 0 ? item.unitPrice / includedCount : 0
+            html += `<td class="cost-cell">₹${item.unitPrice.toFixed(
+              2
+            )} <br><small>(₹${actualPerPersonCost.toFixed(
+              2
+            )} each for ${includedCount})</small></td>`
+          } else {
+            html += `<td class="cost-cell">₹${item.unitPrice.toFixed(2)}</td>`
+          }
+
+          let totalQuantity = 0
+          people.forEach((person) => {
+            const quantity = item.quantities[person] || 0
+            totalQuantity += quantity
+
+            if (item.isShared) {
+              const isIncluded = quantity > 0
+              const bgColor = isIncluded ? "#e8f5e8" : "#ffe6e6"
+              const textColor = isIncluded ? "#27ae60" : "#e74c3c"
+              html += `<td class="quantity-cell" style="background-color: ${bgColor};">
+                            <input type="checkbox" ${
+                              isIncluded ? "checked" : ""
+                            } 
+                                   onchange="toggleSharedItem(${index}, '${person}', this.checked)"
+                                   style="transform: scale(1.3);">
+                            <br><small style="color: ${textColor};">${
+                isIncluded ? "Included" : "Excluded"
+              }</small>
+                        </td>`
+            } else {
+              html += `<td class="quantity-cell">
+                            <input type="number" class="quantity-input" value="${quantity}" min="0" step="0.25"
+                                   onchange="updateQuantity(${index}, '${person}', this.value)">
+                        </td>`
+            }
+          })
+
+          const totalItemCost = item.isShared
+            ? item.unitPrice
+            : totalQuantity * item.unitPrice
+          html += `<td class="cost-cell">₹${totalItemCost.toFixed(2)}</td>`
+          html += "</tr>"
+        })
+
+        // Calculate totals
+        const totals = {}
+        people.forEach((person) => (totals[person] = 0))
+        let grandTotal = 0
+
+        items.forEach((item) => {
+          people.forEach((person) => {
+            const quantity = item.quantities[person] || 0
+            let cost
+            if (item.isShared) {
+              // For shared items, only count people who are included (quantity > 0)
+              const includedPeople = people.filter(
+                (p) => (item.quantities[p] || 0) > 0
+              )
+              cost = quantity > 0 ? item.unitPrice / includedPeople.length : 0
+            } else {
+              // For individual items, multiply quantity by unit price
+              cost = quantity * item.unitPrice
+            }
+            totals[person] += cost
+          })
+        })
+
+        // Calculate grand total separately to avoid double counting
+        grandTotal = items.reduce((total, item) => {
+          if (item.isShared) {
+            return total + item.unitPrice
+          } else {
+            const itemTotal = people.reduce((itemSum, person) => {
+              return itemSum + (item.quantities[person] || 0) * item.unitPrice
+            }, 0)
+            return total + itemTotal
+          }
+        }, 0)
+
+        html +=
+          '<tr class="total-row"><td><strong>Total Owed</strong></td><td></td>'
+        people.forEach((person) => {
+          html += `<td class="cost-cell"><strong>₹${totals[person].toFixed(
+            2
+          )}</strong></td>`
+        })
+        html += `<td class="cost-cell"><strong>₹${grandTotal.toFixed(
+          2
+        )}</strong></td>`
+        html += "</tr>"
+
+        html += "</tbody></table>"
+        document.getElementById("billTable").innerHTML = html
+
+        // Update summary
+        if (items.length > 0) {
+          let summaryHtml = ""
+          let breakdownHtml = "<h4>Detailed Breakdown:</h4>"
+
+          people.forEach((person) => {
+            summaryHtml += `<div class="person-total"><span>${person}:</span><span>₹${totals[
+              person
+            ].toFixed(2)}</span></div>`
+
+            breakdownHtml += `<strong>${person}:</strong><br>`
+            items.forEach((item) => {
+              const quantity = item.quantities[person] || 0
+              if (quantity > 0) {
+                let cost
+                let description
+                if (item.isShared) {
+                  const includedPeople = people.filter(
+                    (p) => (item.quantities[p] || 0) > 0
+                  )
+                  cost =
+                    quantity > 0 ? item.unitPrice / includedPeople.length : 0
+                  if (quantity > 0) {
+                    description = `${
+                      item.name
+                    } (shared): ₹${item.unitPrice.toFixed(2)} ÷ ${
+                      includedPeople.length
+                    } = ₹${cost.toFixed(2)}`
+                  }
+                } else {
+                  cost = quantity * item.unitPrice
+                  description = `${
+                    item.name
+                  }: ${quantity} × ₹${item.unitPrice.toFixed(
+                    2
+                  )} = ₹${cost.toFixed(2)}`
+                }
+                if (description) {
+                  breakdownHtml += `<div class="breakdown-item">• ${description}</div>`
+                }
+              }
+            })
+            breakdownHtml += "<br>"
+          })
+
+          summaryHtml += `<div class="grand-total">Total Bill: ₹${grandTotal.toFixed(
+            2
+          )}</div>`
+          document.getElementById("summaryContent").innerHTML = summaryHtml
+          document.getElementById("breakdown").innerHTML = breakdownHtml
+          document.getElementById("summary").style.display = "block"
+        }
+      }
+
+      // Allow Enter key to add items
+      document
+        .getElementById("personName")
+        .addEventListener("keypress", function (e) {
+          if (e.key === "Enter") addPerson()
+        })
+      document
+        .getElementById("itemName")
+        .addEventListener("keypress", function (e) {
+          if (e.key === "Enter") document.getElementById("itemPrice").focus()
+        })
+      document
+        .getElementById("itemPrice")
+        .addEventListener("keypress", function (e) {
+          if (e.key === "Enter") addItem()
+        })
+
+      // Initialize with sample data
+      people = ["Alice", "Bob", "Charlie"]
+      items = [
+        {
+          name: "Beer",
+          unitPrice: 250.0,
+          quantities: { Alice: 1, Bob: 3, Charlie: 2 },
+          isShared: false,
+        },
+        {
+          name: "Pizza Slice",
+          unitPrice: 150.0,
+          quantities: { Alice: 2, Bob: 2, Charlie: 2 },
+          isShared: false,
+        },
+        {
+          name: "Chicken Wings (Non-veg)",
+          unitPrice: 400.0,
+          quantities: { Alice: 1, Bob: 1, Charlie: 0 },
+          isShared: true,
+        },
+        {
+          name: "GST & Service Charge",
+          unitPrice: 180.0,
+          quantities: { Alice: 1, Bob: 1, Charlie: 1 },
+          isShared: true,
+        },
+      ]
+      updateTable()
+    </script>
+  </body>
+</html>
