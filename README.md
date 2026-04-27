@@ -58,61 +58,63 @@ A smart, interactive web application for splitting bills fairly among friends, w
 - **Browser support**: Modern browsers (Chrome, Firefox, Safari, Edge)
 - **Responsive**: Works on desktop and mobile devices
 
-## 📋 Installation & Setup
-
-The repo is a small monorepo:
+## 📋 Project Layout
 
 ```
-frontend/   static HTML/CSS/JS — open in any browser
-backend/    optional Node service for receipt scanning
+index.html        the static app (open it directly — works offline)
+api/              Vercel serverless functions
+  parse-receipt.js   POST: extracts items from a receipt image
+  health.js          GET:  reports configured model
+package.json      single dep: openai (used as the OpenRouter client)
 ```
 
-### Option 1: Just the calculator (no setup)
+The whole stack lives on **one Vercel deployment**: `index.html` is served as static, `api/*.js` are serverless functions on the same domain. No CORS, no second host, no extra env on the client.
 
-Open `frontend/index.html` in any browser. The bill-splitting calculator works fully offline — only the receipt-scan feature needs the backend.
+## 🚀 Deploying to Vercel (free)
 
-### Option 2: Run locally with receipt scanning
+1. Push this repo to GitHub.
+2. On <https://vercel.com>, click **Add New… → Project**, import the repo, accept the defaults (no build step).
+3. In the project's **Settings → Environment Variables**, add:
+   - `OPENROUTER_API_KEY` → your key from <https://openrouter.ai/keys>
+   - `OPENROUTER_MODEL` *(optional)* → defaults to `google/gemini-2.5-flash`
+   - `PUBLIC_APP_URL` *(optional)* → your deployed URL, used for OpenRouter attribution
+4. Deploy. Future `git push`es auto-deploy.
+
+Health check after deploy: `https://<your-deploy>.vercel.app/api/health` → `{ ok: true, model: "...", configured: true }`.
+
+## 🧑‍💻 Running locally
+
+The receipt-scan feature needs the API functions running locally too, which `vercel dev` handles:
 
 ```bash
-git clone https://github.com/Nanananair/bill-splitter-pro.git
-cd bill-splitter-pro
 npm install
-
-# Add your OpenRouter key (get one at https://openrouter.ai/keys)
-cp backend/.env.example backend/.env
-# edit backend/.env and paste sk-or-...
-
-# Start the backend
-npm run start:backend
-# health check: http://localhost:3001/api/health
-
-# In another terminal, serve the frontend
-cd frontend && python3 -m http.server 8080
-# open http://localhost:8080
+npm install -g vercel        # one-time
+vercel link                   # link this folder to your Vercel project
+vercel env pull .env.local    # pulls OPENROUTER_API_KEY etc. from Vercel
+npm run dev                   # starts vercel dev on http://localhost:3000
 ```
 
-### 📸 Choosing a vision model
+Or for the calculator only (no scanning), just open `index.html` in a browser — the bill-splitting math runs fully offline.
 
-The backend defaults to `google/gemini-2.5-flash` — cheap, fast, and good at receipt OCR. To swap, set `OPENROUTER_MODEL` in `backend/.env`. Any vision-capable model on OpenRouter works:
+## 📸 Choosing a vision model
+
+Defaults to `google/gemini-2.5-flash` — cheap, fast, good at receipt OCR. Set `OPENROUTER_MODEL` in Vercel env vars to swap. Any vision-capable OpenRouter model works:
 
 - `anthropic/claude-sonnet-4.5` — best accuracy
 - `openai/gpt-4o` — strong all-rounder
 - `google/gemini-2.5-pro` — Gemini's flagship
 
-### 🌐 Pointing the deployed frontend at a remote backend
+Receipt photos are resized client-side to 1600px (long side) JPEG before upload — keeps payloads under Vercel's 4.5 MB body limit and reduces model latency without hurting OCR.
 
-By default the frontend talks to `http://localhost:3001`. To override (e.g. on GitHub Pages), inject this before the main `<script>` block in `frontend/index.html`:
+## 🌐 Pointing the frontend at a different backend
+
+The frontend defaults to **same-origin** (no host needed). To point it elsewhere — for example, a separate Vercel project — set this before the main `<script>` block in `index.html`:
 
 ```html
 <script>
-  window.BILL_SPLITTER_BACKEND = "https://your-backend.example.com"
+  window.BILL_SPLITTER_BACKEND = "https://your-other-deploy.vercel.app"
 </script>
 ```
-
-### 🚀 Deployment
-
-- **Frontend**: pushed to `master`/`main` is auto-deployed to GitHub Pages from `frontend/` via `.github/workflows/deploy-pages.yml`. Enable Pages → "Source: GitHub Actions" once in repo settings.
-- **Backend**: not auto-deployed (requires `OPENROUTER_API_KEY` as a secret). Deploy to Render / Railway / Fly.io and set `ALLOWED_ORIGIN` to your Pages URL.
 
 ## 🎨 Interface Guide
 

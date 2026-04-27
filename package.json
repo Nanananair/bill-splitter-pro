@@ -1,14 +1,14 @@
 {
   "name": "bill-splitter-pro",
-  "private": true,
   "version": "1.0.0",
-  "description": "Smart bill splitting calculator with receipt scanning",
-  "workspaces": [
-    "frontend",
-    "backend"
-  ],
+  "private": true,
+  "description": "Smart bill splitting calculator with receipt scanning, deployed on Vercel.",
+  "type": "module",
   "scripts": {
-    "dev:backend": "npm --workspace backend run dev",
-    "start:backend": "npm --workspace backend start"
+    "dev": "vercel dev",
+    "deploy": "vercel deploy --prod"
+  },
+  "dependencies": {
+    "openai": "^4.73.0"
   }
 }

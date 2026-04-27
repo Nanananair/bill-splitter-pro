@@ -425,8 +425,12 @@
     </div>
 
     <script>
+      // Empty default = same-origin (Vercel). Override via
+      // window.BILL_SPLITTER_BACKEND when running the frontend separately.
       const BACKEND_URL =
-        window.BILL_SPLITTER_BACKEND || "http://localhost:3001"
+        typeof window.BILL_SPLITTER_BACKEND === "string"
+          ? window.BILL_SPLITTER_BACKEND
+          : ""
 
       let people = []
       let items = []
@@ -447,6 +451,31 @@
         el.classList.toggle("error", !!isError)
       }
 
+      async function fileToResizedDataUrl(file, maxDim = 1600, quality = 0.85) {
+        const dataUrl = await new Promise((resolve, reject) => {
+          const r = new FileReader()
+          r.onload = () => resolve(r.result)
+          r.onerror = () => reject(r.error || new Error("Could not read file"))
+          r.readAsDataURL(file)
+        })
+        const img = await new Promise((resolve, reject) => {
+          const i = new Image()
+          i.onload = () => resolve(i)
+          i.onerror = () =>
+            reject(new Error("Could not decode image (unsupported format?)"))
+          i.src = dataUrl
+        })
+        const longest = Math.max(img.width, img.height)
+        const scale = longest > maxDim ? maxDim / longest : 1
+        const w = Math.round(img.width * scale)
+        const h = Math.round(img.height * scale)
+        const canvas = document.createElement("canvas")
+        canvas.width = w
+        canvas.height = h
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h)
+        return canvas.toDataURL("image/jpeg", quality)
+      }
+
       async function scanReceipt() {
         const fileInput = document.getElementById("receiptImage")
         const file = fileInput.files && fileInput.files[0]
@@ -456,15 +485,15 @@
         }
         const scanBtn = document.getElementById("scanBtn")
         scanBtn.disabled = true
-        setScanStatus("Scanning…", false)
-
-        const formData = new FormData()
-        formData.append("receipt", file)
+        setScanStatus("Preparing image…", false)
 
         try {
+          const image = await fileToResizedDataUrl(file)
+          setScanStatus("Scanning…", false)
           const response = await fetch(`${BACKEND_URL}/api/parse-receipt`, {
             method: "POST",
-            body: formData,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image }),
           })
           const data = await response.json().catch(() => ({}))
           if (!response.ok) {
@@ -494,9 +523,10 @@
           const isNetwork =
             err instanceof TypeError ||
             /fetch|network/i.test(err.message || "")
+          const target = BACKEND_URL || "this site"
           setScanStatus(
             isNetwork
-              ? `Could not reach the backend at ${BACKEND_URL}. Is it running?`
+              ? `Could not reach ${target}. Check your connection and that the API is deployed.`
               : `Scan failed: ${err.message}`,
             true
           )
