@@ -1,0 +1,19 @@
+{
+  "name": "backend",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Bill Splitter Pro backend - receipt OCR via OpenRouter",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "multer": "^1.4.5-lts.1",
+    "openai": "^4.73.0"
+  }
+}

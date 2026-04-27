@@ -10,6 +10,8 @@ A smart, interactive web application for splitting bills fairly among friends, w
 - **Shared Items**: Split costs equally among selected people (taxes, appetizers, etc.)
 - **Decimal Quantities**: Support for partial items (0.5 dessert, 0.33 pizza slice)
 - **Opt-out Functionality**: Exclude people from specific shared items (vegetarians from non-veg dishes)
+- **📸 Receipt Scanning**: Upload a photo of your bill and have items extracted for you (powered by a vision model via [OpenRouter](https://openrouter.ai))
+- **📱 Mobile-Friendly**: Responsive layout with large tap targets and a horizontally-scrollable bill table on small screens
 
 ### 🎯 Key Capabilities
 
@@ -58,23 +60,59 @@ A smart, interactive web application for splitting bills fairly among friends, w
 
 ## 📋 Installation & Setup
 
-### Option 1: Download and Run Locally
+The repo is a small monorepo:
 
-```bash
-# Clone the repository
-git clone https://github.com/Nanananair/bill-splitter-pro.git
-
-# Navigate to the directory
-cd bill-splitter-pro
-
-# Open in browser
-open index.html
-# or simply double-click the HTML file
+```
+frontend/   static HTML/CSS/JS — open in any browser
+backend/    optional Node service for receipt scanning
 ```
 
-### Option 2: Direct Usage
+### Option 1: Just the calculator (no setup)
 
-Simply download the HTML file and open it in any web browser. No server setup required!
+Open `frontend/index.html` in any browser. The bill-splitting calculator works fully offline — only the receipt-scan feature needs the backend.
+
+### Option 2: Run locally with receipt scanning
+
+```bash
+git clone https://github.com/Nanananair/bill-splitter-pro.git
+cd bill-splitter-pro
+npm install
+
+# Add your OpenRouter key (get one at https://openrouter.ai/keys)
+cp backend/.env.example backend/.env
+# edit backend/.env and paste sk-or-...
+
+# Start the backend
+npm run start:backend
+# health check: http://localhost:3001/api/health
+
+# In another terminal, serve the frontend
+cd frontend && python3 -m http.server 8080
+# open http://localhost:8080
+```
+
+### 📸 Choosing a vision model
+
+The backend defaults to `google/gemini-2.5-flash` — cheap, fast, and good at receipt OCR. To swap, set `OPENROUTER_MODEL` in `backend/.env`. Any vision-capable model on OpenRouter works:
+
+- `anthropic/claude-sonnet-4.5` — best accuracy
+- `openai/gpt-4o` — strong all-rounder
+- `google/gemini-2.5-pro` — Gemini's flagship
+
+### 🌐 Pointing the deployed frontend at a remote backend
+
+By default the frontend talks to `http://localhost:3001`. To override (e.g. on GitHub Pages), inject this before the main `<script>` block in `frontend/index.html`:
+
+```html
+<script>
+  window.BILL_SPLITTER_BACKEND = "https://your-backend.example.com"
+</script>
+```
+
+### 🚀 Deployment
+
+- **Frontend**: pushed to `master`/`main` is auto-deployed to GitHub Pages from `frontend/` via `.github/workflows/deploy-pages.yml`. Enable Pages → "Source: GitHub Actions" once in repo settings.
+- **Backend**: not auto-deployed (requires `OPENROUTER_API_KEY` as a secret). Deploy to Render / Railway / Fly.io and set `ALLOWED_ORIGIN` to your Pages URL.
 
 ## 🎨 Interface Guide
 
@@ -109,7 +147,7 @@ Found a bug or have a feature request?
 - [ ] Export results to PDF/image
 - [ ] Save/load bill templates
 - [ ] Multi-currency support
-- [ ] Receipt photo parsing with OCR
+- [x] Receipt photo parsing with OCR ✅ (via OpenRouter — model is one env-var swap)
 - [ ] Group payment tracking over time
 - [ ] Integration with payment apps (UPI, PayPal)
 
