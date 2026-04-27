@@ -181,6 +181,125 @@
         margin: 5px 0;
         font-size: 14px;
       }
+      .scan-status {
+        font-size: 13px;
+        color: #555;
+      }
+      .scan-status.error {
+        color: #c0392b;
+      }
+      .receipt-preview {
+        margin-top: 16px;
+        padding: 16px;
+        background: #fff8e1;
+        border-radius: 8px;
+        border-left: 4px solid #ffb300;
+      }
+      .receipt-preview h4 {
+        margin-top: 0;
+        color: #8a6d00;
+      }
+      .preview-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 0;
+        border-bottom: 1px dashed #f0d480;
+      }
+      .preview-row:last-child {
+        border-bottom: none;
+      }
+      .preview-row input[type="text"] {
+        flex: 1 1 160px;
+        min-width: 0;
+      }
+      .preview-row input[type="number"] {
+        flex: 0 0 100px;
+      }
+      .preview-row label {
+        font-size: 13px;
+        white-space: nowrap;
+      }
+      .preview-actions {
+        margin-top: 12px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      @media (max-width: 768px) {
+        body {
+          padding: 10px;
+        }
+        .container {
+          padding: 16px;
+          border-radius: 8px;
+        }
+        h1 {
+          font-size: 22px;
+          margin-bottom: 16px;
+        }
+        .input-section {
+          padding: 14px;
+          margin-bottom: 20px;
+        }
+        .input-row {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 8px;
+        }
+        input[type="text"],
+        input[type="number"] {
+          width: 100%;
+          box-sizing: border-box;
+          font-size: 16px;
+        }
+        button {
+          width: 100%;
+          padding: 12px 16px;
+          min-height: 44px;
+          margin: 0;
+        }
+        .remove-btn {
+          width: auto;
+          padding: 6px 10px;
+          min-height: 32px;
+        }
+        th,
+        td {
+          padding: 6px;
+          font-size: 13px;
+        }
+        .quantity-input {
+          width: 56px;
+        }
+        .person-header {
+          min-width: 80px;
+        }
+        .preview-row {
+          flex-direction: row;
+        }
+        .preview-row input[type="text"],
+        .preview-row input[type="number"] {
+          width: auto;
+        }
+      }
+      @media (max-width: 480px) {
+        h1 {
+          font-size: 18px;
+        }
+        .instructions {
+          font-size: 13px;
+          padding: 12px;
+        }
+        .person-total {
+          font-size: 14px;
+        }
+      }
     </style>
   </head>
   <body>
@@ -215,6 +334,42 @@
             we split tax equally, but vegetarian friend doesn't pay for chicken"
           </li>
         </ul>
+      </div>
+
+      <div class="input-section">
+        <h3>📸 Scan Receipt (optional)</h3>
+        <div class="input-row">
+          <input
+            type="file"
+            id="receiptImage"
+            accept="image/*"
+            capture="environment"
+          />
+          <button onclick="scanReceipt()" class="add-btn" id="scanBtn">
+            Scan
+          </button>
+          <span id="scanStatus" class="scan-status"></span>
+        </div>
+        <small
+          >Snap or upload a photo of your bill — we'll extract the items and
+          let you review them before they're added.</small
+        >
+        <div
+          id="receiptPreview"
+          class="receipt-preview"
+          style="display: none"
+        >
+          <h4>Extracted items — review before adding</h4>
+          <div id="receiptPreviewList"></div>
+          <div class="preview-actions">
+            <button class="add-btn" onclick="confirmReceiptItems()">
+              Add all to bill
+            </button>
+            <button class="remove-btn" onclick="cancelReceiptItems()">
+              Discard
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="input-section">
@@ -270,8 +425,202 @@
     </div>
 
     <script>
+      // Empty default = same-origin (Vercel). Override via
+      // window.BILL_SPLITTER_BACKEND when running the frontend separately.
+      const BACKEND_URL =
+        typeof window.BILL_SPLITTER_BACKEND === "string"
+          ? window.BILL_SPLITTER_BACKEND
+          : ""
+
       let people = []
       let items = []
+      let pendingReceiptItems = []
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;")
+      }
+
+      function setScanStatus(message, isError) {
+        const el = document.getElementById("scanStatus")
+        el.textContent = message || ""
+        el.classList.toggle("error", !!isError)
+      }
+
+      async function fileToResizedDataUrl(file, maxDim = 1600, quality = 0.85) {
+        const dataUrl = await new Promise((resolve, reject) => {
+          const r = new FileReader()
+          r.onload = () => resolve(r.result)
+          r.onerror = () => reject(r.error || new Error("Could not read file"))
+          r.readAsDataURL(file)
+        })
+        const img = await new Promise((resolve, reject) => {
+          const i = new Image()
+          i.onload = () => resolve(i)
+          i.onerror = () =>
+            reject(new Error("Could not decode image (unsupported format?)"))
+          i.src = dataUrl
+        })
+        const longest = Math.max(img.width, img.height)
+        const scale = longest > maxDim ? maxDim / longest : 1
+        const w = Math.round(img.width * scale)
+        const h = Math.round(img.height * scale)
+        const canvas = document.createElement("canvas")
+        canvas.width = w
+        canvas.height = h
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h)
+        return canvas.toDataURL("image/jpeg", quality)
+      }
+
+      async function scanReceipt() {
+        const fileInput = document.getElementById("receiptImage")
+        const file = fileInput.files && fileInput.files[0]
+        if (!file) {
+          setScanStatus("Choose a receipt image first.", true)
+          return
+        }
+        const scanBtn = document.getElementById("scanBtn")
+        scanBtn.disabled = true
+        setScanStatus("Preparing image…", false)
+
+        try {
+          const image = await fileToResizedDataUrl(file)
+          setScanStatus("Scanning…", false)
+          const response = await fetch(`${BACKEND_URL}/api/parse-receipt`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image }),
+          })
+          const data = await response.json().catch(() => ({}))
+          if (!response.ok) {
+            throw new Error(data.error || `Server returned ${response.status}`)
+          }
+          const extracted = Array.isArray(data.items) ? data.items : []
+          if (extracted.length === 0) {
+            setScanStatus(
+              "No items detected. Try a clearer or better-lit photo.",
+              true
+            )
+            return
+          }
+          pendingReceiptItems = extracted.map((it) => ({
+            name: String(it.name || "").trim(),
+            price: Number(it.price) || 0,
+            isShared: false,
+          }))
+          renderReceiptPreview()
+          setScanStatus(
+            `Found ${pendingReceiptItems.length} item${
+              pendingReceiptItems.length === 1 ? "" : "s"
+            }. Review below.`,
+            false
+          )
+        } catch (err) {
+          const isNetwork =
+            err instanceof TypeError ||
+            /fetch|network/i.test(err.message || "")
+          const target = BACKEND_URL || "this site"
+          setScanStatus(
+            isNetwork
+              ? `Could not reach ${target}. Check your connection and that the API is deployed.`
+              : `Scan failed: ${err.message}`,
+            true
+          )
+        } finally {
+          scanBtn.disabled = false
+        }
+      }
+
+      function renderReceiptPreview() {
+        const wrap = document.getElementById("receiptPreview")
+        const list = document.getElementById("receiptPreviewList")
+        if (pendingReceiptItems.length === 0) {
+          wrap.style.display = "none"
+          list.innerHTML = ""
+          return
+        }
+        let html = ""
+        pendingReceiptItems.forEach((it, i) => {
+          html += `
+            <div class="preview-row">
+              <input type="text" value="${escapeHtml(it.name)}"
+                     oninput="updatePendingItem(${i}, 'name', this.value)" />
+              <input type="number" step="0.01" min="0" value="${it.price}"
+                     oninput="updatePendingItem(${i}, 'price', this.value)" />
+              <label>
+                <input type="checkbox" ${it.isShared ? "checked" : ""}
+                       onchange="updatePendingItem(${i}, 'isShared', this.checked)" />
+                Shared
+              </label>
+              <button class="remove-btn" onclick="removePendingItem(${i})">✕</button>
+            </div>`
+        })
+        list.innerHTML = html
+        wrap.style.display = "block"
+      }
+
+      function updatePendingItem(index, field, value) {
+        const item = pendingReceiptItems[index]
+        if (!item) return
+        if (field === "price") {
+          item.price = parseFloat(value) || 0
+        } else if (field === "isShared") {
+          item.isShared = !!value
+        } else if (field === "name") {
+          item.name = value
+        }
+      }
+
+      function removePendingItem(index) {
+        pendingReceiptItems.splice(index, 1)
+        renderReceiptPreview()
+      }
+
+      function confirmReceiptItems() {
+        if (people.length === 0) {
+          alert(
+            "Add people first, then click 'Add all to bill' again."
+          )
+          return
+        }
+        const valid = pendingReceiptItems.filter(
+          (it) => it.name.trim().length > 0 && it.price > 0
+        )
+        if (valid.length === 0) {
+          alert("No valid items to add. Each item needs a name and a price > 0.")
+          return
+        }
+        valid.forEach((it) => {
+          const quantities = {}
+          people.forEach((person) => {
+            quantities[person] = it.isShared ? 1 : 0
+          })
+          items.push({
+            name: it.name.trim(),
+            unitPrice: it.price,
+            quantities: quantities,
+            isShared: it.isShared,
+          })
+        })
+        pendingReceiptItems = []
+        renderReceiptPreview()
+        document.getElementById("receiptImage").value = ""
+        setScanStatus(
+          `Added ${valid.length} item${valid.length === 1 ? "" : "s"} to the bill.`,
+          false
+        )
+        updateTable()
+      }
+
+      function cancelReceiptItems() {
+        pendingReceiptItems = []
+        renderReceiptPreview()
+        setScanStatus("", false)
+      }
 
       function addPerson() {
         const name = document.getElementById("personName").value.trim()
@@ -370,7 +719,7 @@
           return
         }
 
-        let html = "<table><thead><tr>"
+        let html = '<div class="table-wrap"><table><thead><tr>'
         html += "<th>Item</th><th>Unit Price / Total</th>"
         people.forEach((person) => {
           html += `<th class="person-header">${person} <button onclick="removePerson('${person}')" class="remove-btn">✕</button><br><small>Quantity</small></th>`
@@ -479,7 +828,7 @@
         )}</strong></td>`
         html += "</tr>"
 
-        html += "</tbody></table>"
+        html += "</tbody></table></div>"
         document.getElementById("billTable").innerHTML = html
 
         // Update summary

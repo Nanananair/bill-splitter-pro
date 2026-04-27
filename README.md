@@ -10,6 +10,8 @@ A smart, interactive web application for splitting bills fairly among friends, w
 - **Shared Items**: Split costs equally among selected people (taxes, appetizers, etc.)
 - **Decimal Quantities**: Support for partial items (0.5 dessert, 0.33 pizza slice)
 - **Opt-out Functionality**: Exclude people from specific shared items (vegetarians from non-veg dishes)
+- **📸 Receipt Scanning**: Upload a photo of your bill and have items extracted for you (powered by a vision model via [OpenRouter](https://openrouter.ai))
+- **📱 Mobile-Friendly**: Responsive layout with large tap targets and a horizontally-scrollable bill table on small screens
 
 ### 🎯 Key Capabilities
 
@@ -56,25 +58,63 @@ A smart, interactive web application for splitting bills fairly among friends, w
 - **Browser support**: Modern browsers (Chrome, Firefox, Safari, Edge)
 - **Responsive**: Works on desktop and mobile devices
 
-## 📋 Installation & Setup
+## 📋 Project Layout
 
-### Option 1: Download and Run Locally
-
-```bash
-# Clone the repository
-git clone https://github.com/Nanananair/bill-splitter-pro.git
-
-# Navigate to the directory
-cd bill-splitter-pro
-
-# Open in browser
-open index.html
-# or simply double-click the HTML file
+```
+index.html        the static app (open it directly — works offline)
+api/              Vercel serverless functions
+  parse-receipt.js   POST: extracts items from a receipt image
+  health.js          GET:  reports configured model
+package.json      single dep: openai (used as the OpenRouter client)
 ```
 
-### Option 2: Direct Usage
+The whole stack lives on **one Vercel deployment**: `index.html` is served as static, `api/*.js` are serverless functions on the same domain. No CORS, no second host, no extra env on the client.
 
-Simply download the HTML file and open it in any web browser. No server setup required!
+## 🚀 Deploying to Vercel (free)
+
+1. Push this repo to GitHub.
+2. On <https://vercel.com>, click **Add New… → Project**, import the repo, accept the defaults (no build step).
+3. In the project's **Settings → Environment Variables**, add:
+   - `OPENROUTER_API_KEY` → your key from <https://openrouter.ai/keys>
+   - `OPENROUTER_MODEL` *(optional)* → defaults to `google/gemini-2.5-flash`
+   - `PUBLIC_APP_URL` *(optional)* → your deployed URL, used for OpenRouter attribution
+4. Deploy. Future `git push`es auto-deploy.
+
+Health check after deploy: `https://<your-deploy>.vercel.app/api/health` → `{ ok: true, model: "...", configured: true }`.
+
+## 🧑‍💻 Running locally
+
+The receipt-scan feature needs the API functions running locally too, which `vercel dev` handles:
+
+```bash
+npm install
+npm install -g vercel        # one-time
+vercel link                   # link this folder to your Vercel project
+vercel env pull .env.local    # pulls OPENROUTER_API_KEY etc. from Vercel
+npm run dev                   # starts vercel dev on http://localhost:3000
+```
+
+Or for the calculator only (no scanning), just open `index.html` in a browser — the bill-splitting math runs fully offline.
+
+## 📸 Choosing a vision model
+
+Defaults to `google/gemini-2.5-flash` — cheap, fast, good at receipt OCR. Set `OPENROUTER_MODEL` in Vercel env vars to swap. Any vision-capable OpenRouter model works:
+
+- `anthropic/claude-sonnet-4.5` — best accuracy
+- `openai/gpt-4o` — strong all-rounder
+- `google/gemini-2.5-pro` — Gemini's flagship
+
+Receipt photos are resized client-side to 1600px (long side) JPEG before upload — keeps payloads under Vercel's 4.5 MB body limit and reduces model latency without hurting OCR.
+
+## 🌐 Pointing the frontend at a different backend
+
+The frontend defaults to **same-origin** (no host needed). To point it elsewhere — for example, a separate Vercel project — set this before the main `<script>` block in `index.html`:
+
+```html
+<script>
+  window.BILL_SPLITTER_BACKEND = "https://your-other-deploy.vercel.app"
+</script>
+```
 
 ## 🎨 Interface Guide
 
@@ -109,7 +149,7 @@ Found a bug or have a feature request?
 - [ ] Export results to PDF/image
 - [ ] Save/load bill templates
 - [ ] Multi-currency support
-- [ ] Receipt photo parsing with OCR
+- [x] Receipt photo parsing with OCR ✅ (via OpenRouter — model is one env-var swap)
 - [ ] Group payment tracking over time
 - [ ] Integration with payment apps (UPI, PayPal)
 
