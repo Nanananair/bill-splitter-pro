@@ -1,6 +1,11 @@
+import type { VercelRequest, VercelResponse } from "@vercel/node"
 import OpenAI from "openai"
+import { applyCors } from "./_lib/cors"
+import { rateLimit, clientIp } from "./_lib/ratelimit"
 
 const DEFAULT_MODEL = "google/gemini-2.5-flash"
+const MAX_BASE64_CHARS = 4_500_000 // ~3.4 MB binary
+const ALLOWED_IMAGE_PREFIX = /^data:image\/(jpeg|jpg|png|webp);base64,/i
 
 const SYSTEM_PROMPT =
   "You extract line items from receipt photos. Reply ONLY with JSON matching the requested schema. Ignore subtotals and grand totals; include taxes and service charges as separate items so the user can decide how to split them."
@@ -28,26 +33,41 @@ export const config = {
   },
 }
 
-export default async function handler(req, res) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!applyCors(req, res)) return
+
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST")
     res.status(405).json({ error: "Method not allowed" })
     return
   }
+
   if (!process.env.OPENROUTER_API_KEY) {
-    res
-      .status(500)
-      .json({ error: "Server is not configured: OPENROUTER_API_KEY is missing." })
+    res.status(500).json({ error: "Server is not configured: OPENROUTER_API_KEY is missing." })
     return
   }
 
-  const body = req.body || {}
+  const limit = await rateLimit(clientIp(req))
+  if (!limit.ok) {
+    res.setHeader("Retry-After", String(limit.retryAfterSec))
+    res.setHeader("X-RateLimit-Remaining", "0")
+    res.status(429).json({ error: "Too many requests. Please try again later." })
+    return
+  }
+  if (limit.remaining >= 0) {
+    res.setHeader("X-RateLimit-Remaining", String(limit.remaining))
+  }
+
+  const body = (req.body ?? {}) as { image?: unknown }
   const image = typeof body.image === "string" ? body.image : null
-  if (!image || !image.startsWith("data:image/")) {
+  if (!image || !ALLOWED_IMAGE_PREFIX.test(image)) {
     res.status(400).json({
-      error:
-        "Body must be JSON shaped { image: 'data:image/...;base64,...' }.",
+      error: "Body must be JSON shaped { image: 'data:image/jpeg|png|webp;base64,...' }.",
     })
+    return
+  }
+  if (image.length > MAX_BASE64_CHARS) {
+    res.status(413).json({ error: "Image is too large. Compress to under ~3 MB." })
     return
   }
 
@@ -56,13 +76,12 @@ export default async function handler(req, res) {
     apiKey: process.env.OPENROUTER_API_KEY,
     baseURL: "https://openrouter.ai/api/v1",
     defaultHeaders: {
-      "HTTP-Referer":
-        process.env.PUBLIC_APP_URL || "https://bill-splitter-pro.vercel.app",
+      "HTTP-Referer": process.env.PUBLIC_APP_URL || "https://bill-splitter-pro.vercel.app",
       "X-Title": "Bill Splitter Pro",
     },
   })
 
-  let raw
+  let raw: string
   try {
     const completion = await client.chat.completions.create({
       model,
@@ -80,15 +99,15 @@ export default async function handler(req, res) {
     })
     raw = completion.choices?.[0]?.message?.content ?? ""
   } catch (err) {
-    const status = err?.status || 502
-    const message =
-      err?.error?.message || err?.message || "Upstream model request failed"
+    const e = err as { status?: number; error?: { message?: string }; message?: string }
+    const status = e?.status ?? 502
+    const message = e?.error?.message ?? e?.message ?? "Upstream model request failed"
     console.error("[parse-receipt] upstream error:", message)
     res.status(status).json({ error: message })
     return
   }
 
-  let parsed
+  let parsed: { items?: unknown; currency?: unknown }
   try {
     parsed = JSON.parse(raw)
   } catch {
@@ -101,19 +120,17 @@ export default async function handler(req, res) {
   }
 
   const items = Array.isArray(parsed.items)
-    ? parsed.items
+    ? (parsed.items as Array<{ name?: unknown; price?: unknown }>)
         .map((it) => ({
           name: typeof it?.name === "string" ? it.name.trim() : "",
           price: Number(it?.price),
         }))
-        .filter(
-          (it) => it.name.length > 0 && Number.isFinite(it.price) && it.price > 0
-        )
+        .filter((it) => it.name.length > 0 && Number.isFinite(it.price) && it.price > 0)
     : []
 
   const currency =
     typeof parsed.currency === "string" && parsed.currency.trim().length > 0
-      ? parsed.currency.trim()
+      ? parsed.currency.trim().toUpperCase()
       : null
 
   res.json({ items, currency, model })

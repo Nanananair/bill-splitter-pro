@@ -1,181 +1,115 @@
-# 💰 Bill Splitter Pro
+# Bill Splitter Pro
 
-A smart, interactive web application for splitting bills fairly among friends, with support for individual quantities, shared items, and opt-out features.
+A small React + TypeScript SPA for splitting restaurant bills fairly. Add people, add items (per-quantity or shared), or scan a receipt photo and have the line items extracted for you. Per-person totals always reconcile to the bill exactly — no floating-point drift.
 
-## ✨ Features
+Deployed as a single Vercel project: a Vite SPA served as static files, plus serverless functions in `api/` on the same origin.
 
-### 🧮 Smart Splitting Options
+## Features
 
-- **Individual Items**: Track quantities per person (perfect for "I had 1 beer, you had 3")
-- **Shared Items**: Split costs equally among selected people (taxes, appetizers, etc.)
-- **Decimal Quantities**: Support for partial items (0.5 dessert, 0.33 pizza slice)
-- **Opt-out Functionality**: Exclude people from specific shared items (vegetarians from non-veg dishes)
-- **📸 Receipt Scanning**: Upload a photo of your bill and have items extracted for you (powered by a vision model via [OpenRouter](https://openrouter.ai))
-- **📱 Mobile-Friendly**: Responsive layout with large tap targets and a horizontally-scrollable bill table on small screens
+- **Per-quantity and shared items.** Track "Alice had 1 beer, Bob had 3", or split a tax/appetizer evenly among included people. Anyone can opt out of a shared item.
+- **Receipt scanning.** Upload a photo; line items + currency are extracted via [OpenRouter](https://openrouter.ai) (default model: `google/gemini-2.5-flash`). Edit the result before adding to the bill.
+- **Multi-currency.** Detected from the receipt and overridable from the header. Amounts are formatted with `Intl.NumberFormat` and stored as integer minor units (paise/cents) — per-person sums always equal the displayed grand total.
+- **Persistence.** People, items, and currency are saved to `localStorage`; refreshing the tab won't lose your bill.
+- **Dark mode by default.** Equal-priority mobile and desktop layouts: a real table on `lg+` screens, per-item cards with a sticky totals sheet on phones.
 
-### 🎯 Key Capabilities
+## Tech stack
 
-- Real-time calculations as you input data
-- Detailed breakdown showing exactly what each person owes
-- Indian Rupee (₹) currency support
-- Clean, responsive interface
-- One-click data clearing
-- Visual indicators for included/excluded shared items
+- **Frontend:** React 18, Vite, TypeScript (strict), Tailwind CSS, shadcn-style components on Radix primitives, Zustand (with `persist` middleware) for state.
+- **API:** Vercel serverless functions in `api/`. `parse-receipt` calls OpenRouter via the `openai` SDK, gated by an Origin allowlist, per-IP rate limiting (Upstash Redis), and a server-side payload-size cap.
+- **Tests:** Vitest + React Testing Library. Lint via ESLint flat config.
 
-### 🍕 Perfect For
-
-- Restaurant bills with mixed individual and shared orders
-- Group dinners where people have different dietary preferences
-- Bar tabs with varying drink consumption
-- Any scenario where fair splitting matters
-
-## 🚀 Quick Start
-
-1. **Add People**: Enter names of everyone in your group
-2. **Add Items**:
-   - For individual items (drinks, personal dishes): Enter unit price and quantities per person
-   - For shared items (taxes, appetizers): Check "Shared item" and enter total amount
-3. **Customize**: Uncheck people from shared items if they shouldn't pay (e.g., vegetarians from meat dishes)
-4. **Review**: Check the detailed breakdown to see exactly who owes what
-
-## 📱 Usage Examples
-
-### Scenario 1: Mixed Restaurant Order
-
-- **Individual**: Alice had 1 beer (₹250), Bob had 3 beers (₹750)
-- **Shared**: Everyone splits the appetizer (₹450 ÷ 3 = ₹150 each)
-- **Opt-out**: Vegetarian Charlie doesn't pay for chicken wings
-
-### Scenario 2: Partial Items
-
-- **Split dessert**: Alice and Bob each had 0.5 of a ₹300 cake (₹150 each)
-- **Shared tax**: 18% GST split equally among all diners
-
-## 🛠️ Technical Details
-
-- **Technology**: Pure HTML, CSS, and JavaScript
-- **No dependencies**: Works offline, no external libraries
-- **Browser support**: Modern browsers (Chrome, Firefox, Safari, Edge)
-- **Responsive**: Works on desktop and mobile devices
-
-## 📋 Project Layout
+## Project layout
 
 ```
-index.html        the static app (open it directly — works offline)
-api/              Vercel serverless functions
-  parse-receipt.js   POST: extracts items from a receipt image
-  health.js          GET:  reports configured model
-package.json      single dep: openai (used as the OpenRouter client)
+api/
+  parse-receipt.ts      POST: hardened receipt OCR
+  health.ts             GET:  reports model + configured-flags
+  _lib/cors.ts          Origin allowlist + preflight
+  _lib/ratelimit.ts     Upstash sliding-window limiter
+src/
+  components/           UI + feature components
+  store/                Zustand store + memoized selectors
+  lib/                  money math, currency, fetch helpers
+  main.tsx, App.tsx
+test/                   Vitest specs (money, store, XSS, API)
+index.html              Vite entry
+legacy.html             previous monolith (kept temporarily; remove at cutover)
+vercel.json             framework=vite, SPA rewrite to index.html
 ```
 
-The whole stack lives on **one Vercel deployment**: `index.html` is served as static, `api/*.js` are serverless functions on the same domain. No CORS, no second host, no extra env on the client.
+## Running locally
 
-## 🚀 Deploying to Vercel (free)
-
-1. Push this repo to GitHub.
-2. On <https://vercel.com>, click **Add New… → Project**, import the repo, accept the defaults (no build step).
-3. In the project's **Settings → Environment Variables**, add:
-   - `OPENROUTER_API_KEY` → your key from <https://openrouter.ai/keys>
-   - `OPENROUTER_MODEL` *(optional)* → defaults to `google/gemini-2.5-flash`
-   - `PUBLIC_APP_URL` *(optional)* → your deployed URL, used for OpenRouter attribution
-4. Deploy. Future `git push`es auto-deploy.
-
-Health check after deploy: `https://<your-deploy>.vercel.app/api/health` → `{ ok: true, model: "...", configured: true }`.
-
-## 🧑‍💻 Running locally
-
-The receipt-scan feature needs the API functions running locally too, which `vercel dev` handles:
+The receipt-scan feature needs the API functions, which `vercel dev` runs alongside the Vite dev server.
 
 ```bash
 npm install
-npm install -g vercel        # one-time
-vercel link                   # link this folder to your Vercel project
-vercel env pull .env.local    # pulls OPENROUTER_API_KEY etc. from Vercel
-npm run dev                   # starts vercel dev on http://localhost:3000
+npm install -g vercel             # one-time
+vercel link                        # link this folder to your Vercel project
+vercel env pull .env.local         # pulls OPENROUTER_API_KEY etc. from Vercel
+npm run dev                        # vercel dev on http://localhost:3000
 ```
 
-Or for the calculator only (no scanning), just open `index.html` in a browser — the bill-splitting math runs fully offline.
+For frontend-only iteration with no scan endpoint:
 
-## 📸 Choosing a vision model
-
-Defaults to `google/gemini-2.5-flash` — cheap, fast, good at receipt OCR. Set `OPENROUTER_MODEL` in Vercel env vars to swap. Any vision-capable OpenRouter model works:
-
-- `anthropic/claude-sonnet-4.5` — best accuracy
-- `openai/gpt-4o` — strong all-rounder
-- `google/gemini-2.5-pro` — Gemini's flagship
-
-Receipt photos are resized client-side to 1600px (long side) JPEG before upload — keeps payloads under Vercel's 4.5 MB body limit and reduces model latency without hurting OCR.
-
-## 🌐 Pointing the frontend at a different backend
-
-The frontend defaults to **same-origin** (no host needed). To point it elsewhere — for example, a separate Vercel project — set this before the main `<script>` block in `index.html`:
-
-```html
-<script>
-  window.BILL_SPLITTER_BACKEND = "https://your-other-deploy.vercel.app"
-</script>
+```bash
+npm run dev:vite
 ```
 
-## 🎨 Interface Guide
+## Scripts
 
-### Adding Items
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | `vercel dev` — full stack, including `/api/*` |
+| `npm run dev:vite` | Vite alone, no serverless functions |
+| `npm run build` | TypeScript project build + Vite production build to `dist/` |
+| `npm run preview` | Serve the production build locally |
+| `npm run lint` | ESLint on `src/`, `api/`, `test/` |
+| `npm run typecheck` | `tsc --noEmit` across all references |
+| `npm test` | Run the Vitest suite once |
+| `npm run test:watch` | Vitest in watch mode |
 
-- **Regular items**: Enter item name and unit price
-- **Shared items**: Check the "Shared item" checkbox before adding
+## Environment variables
 
-### Quantity Input
+Copy `.env.local.example` to `.env.local` and fill in:
 
-- **Individual items**: Use number inputs to set quantities per person
-- **Shared items**: Use checkboxes to include/exclude people
+| Var | Required | Purpose |
+| --- | --- | --- |
+| `OPENROUTER_API_KEY` | yes (production) | Auth for the OpenRouter chat completions API |
+| `OPENROUTER_MODEL` | no | Defaults to `google/gemini-2.5-flash` |
+| `PUBLIC_APP_URL` | no | Used in OpenRouter attribution headers |
+| `ALLOWED_ORIGINS` | yes (production) | Comma-separated list of origins allowed to call `/api/parse-receipt` |
+| `UPSTASH_REDIS_REST_URL` | yes (production) | Upstash REST URL for rate limiting |
+| `UPSTASH_REDIS_REST_TOKEN` | yes (production) | Upstash REST token |
 
-### Visual Indicators
+The rate limiter is **fail-open** when the Upstash vars are absent (it logs a warning) — fine for local dev, **not** for production. Set them on Vercel before going live.
 
-- 🔄 **Shared items**: Marked with a recycle icon
-- ✅ **Included**: Green background for people included in shared items
-- ❌ **Excluded**: Red background for people excluded from shared items
+## Deploying to Vercel
 
-## 🤝 Contributing
+1. Push to GitHub and import as a project on Vercel.
+2. Vercel auto-detects `framework: "vite"` (also pinned in `vercel.json`).
+3. In **Project → Settings → Environment Variables**, set the variables in the table above.
+4. Deploy. Future `git push`es auto-deploy.
 
-Found a bug or have a feature request?
+Health check after deploy: `https://<your-deploy>.vercel.app/api/health` → `{ ok: true, configured: true, rateLimitConfigured: true, model: "..." }`.
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit your changes: `git commit -m 'Add amazing feature'`
-4. Push to branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request
+## How splits stay exact
 
-## 💡 Feature Ideas & Roadmap
+- Every amount is stored as an integer in the currency's minor units (e.g. paise for INR, cents for USD, yen for JPY).
+- Even splits use the **largest-remainder** method: e.g. ₹100.01 split three ways becomes `[₹33.34, ₹33.34, ₹33.33]`. Sum = total, by construction.
+- Per-item allocations across people use the same method weighted by quantity, so the sum of per-person allocations always equals the line total — and therefore the sum of per-person totals always equals the grand total. There is no floating-point drift.
 
-- [ ] Export results to PDF/image
-- [ ] Save/load bill templates
-- [ ] Multi-currency support
-- [x] Receipt photo parsing with OCR ✅ (via OpenRouter — model is one env-var swap)
-- [ ] Group payment tracking over time
-- [ ] Integration with payment apps (UPI, PayPal)
+## Security model for `/api/parse-receipt`
 
-## 🐛 Known Issues
+Three guards in order, each early-returns:
 
-- Rounding may cause minor discrepancies with very small amounts
-- Mobile keyboard behavior varies across devices
+1. **Origin allowlist.** Requests with an `Origin` not in `ALLOWED_ORIGINS` get `403`. Same-origin POSTs (no `Origin` header) are allowed only when `NODE_ENV !== "production"` or the request host matches an allowed origin's host.
+2. **Per-IP rate limit.** Upstash sliding window (20 req/hr by default). Returns `429` with `Retry-After` and `X-RateLimit-Remaining` headers when the budget is exhausted.
+3. **Body-size cap.** Outer Vercel `bodyParser` limits the request to 5 MB. Inside the handler we additionally require a `data:image/{jpeg,png,webp};base64,...` prefix and reject base64 strings longer than ~3.4 MB binary equivalent with `413`.
 
-## 📄 License
+## Migration from v0/v1
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+If your browser has `localStorage["bill-splitter-pro"]` from the legacy single-file build, the Zustand `persist` migration runs at `version: 2`: rupee floats become integer minor units, decimal quantities become milli-fixed-point, and people stored as plain strings get fresh ids. Your bill survives the upgrade.
 
-## 🙏 Acknowledgments
+## License
 
-- Built for fair and transparent bill splitting
-- Inspired by real-world dining scenarios and group expense challenges
-- Designed with Indian dining culture and currency in mind
-
-## 📞 Support
-
-If you encounter any issues or have questions:
-
-- Open an issue on GitHub
-- Check existing issues for solutions
-- Feel free to contribute improvements!
-
----
-
-**Happy splitting!** 🍻 Make every group dinner fair and stress-free.
+MIT.
