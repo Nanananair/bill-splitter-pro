@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node"
 import OpenAI from "openai"
-import { applyCors } from "./_lib/cors"
-import { rateLimit, clientIp } from "./_lib/ratelimit"
+import { applyCors } from "./_lib/cors.js"
+import { rateLimit, clientIp } from "./_lib/ratelimit.js"
 
 const DEFAULT_MODEL = "google/gemini-2.5-flash"
 const MAX_BASE64_CHARS = 4_500_000 // ~3.4 MB binary
