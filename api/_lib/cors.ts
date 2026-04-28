@@ -1,10 +1,21 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node"
 
+function normalizeOrigin(value: string): string {
+  try {
+    // URL.origin is the canonical "scheme://host[:port]" form — no path,
+    // no trailing slash, lower-cased host.
+    return new URL(value).origin
+  } catch {
+    return value.replace(/\/+$/, "")
+  }
+}
+
 function parseAllowed(): string[] {
   return (process.env.ALLOWED_ORIGINS ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean)
+    .map(normalizeOrigin)
 }
 
 /**
@@ -18,7 +29,8 @@ function parseAllowed(): string[] {
  */
 export function applyCors(req: VercelRequest, res: VercelResponse): boolean {
   const allowed = parseAllowed()
-  const origin = typeof req.headers.origin === "string" ? req.headers.origin : ""
+  const rawOrigin = typeof req.headers.origin === "string" ? req.headers.origin : ""
+  const origin = rawOrigin ? normalizeOrigin(rawOrigin) : ""
   const matches = origin && (allowed.includes(origin) || allowed.includes("*"))
   const allowMissing =
     !origin && (process.env.NODE_ENV !== "production" || allowed.includes("*"))
@@ -46,7 +58,8 @@ export function applyCors(req: VercelRequest, res: VercelResponse): boolean {
   }
 
   if (matches) {
-    res.setHeader("Access-Control-Allow-Origin", origin)
+    // Echo back the raw origin so the browser's CORS check sees an exact match.
+    res.setHeader("Access-Control-Allow-Origin", rawOrigin)
     res.setHeader("Vary", "Origin")
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS")
     res.setHeader("Access-Control-Allow-Headers", "Content-Type")
