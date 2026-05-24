@@ -36,17 +36,20 @@ export function SummarySheet({ variant = "stickyMobile" }: SummarySheetProps) {
           <p className="text-sm text-muted-foreground">Nothing to total yet.</p>
         ) : (
           <ul className="flex flex-col gap-1.5">
-            {people.map((p) => (
-              <li
-                key={p.id}
-                className="flex items-center justify-between gap-2 text-sm"
-              >
-                <span className="truncate">{p.name}</span>
-                <span className="font-mono tabular-nums">
-                  {formatMoney(totals.perPersonMinor[p.id] ?? 0, currency)}
-                </span>
-              </li>
-            ))}
+            {people.map((p) => {
+              const amt = totals.perPersonMinor[p.id] ?? 0
+              return (
+                <li
+                  key={p.id}
+                  className="flex items-center justify-between gap-2 text-sm"
+                >
+                  <span className="truncate">{p.name}</span>
+                  <span className={`font-mono tabular-nums${amt < 0 ? " text-destructive" : ""}`}>
+                    {formatMoney(amt, currency)}
+                  </span>
+                </li>
+              )
+            })}
           </ul>
         )}
         {items.length > 0 ? (
@@ -83,17 +86,20 @@ export function SummarySheet({ variant = "stickyMobile" }: SummarySheetProps) {
             <p className="text-sm text-muted-foreground">Nothing to total yet.</p>
           ) : (
             <ul className="flex flex-col gap-1.5">
-              {people.map((p) => (
+              {people.map((p) => {
+              const amt = totals.perPersonMinor[p.id] ?? 0
+              return (
                 <li
                   key={p.id}
                   className="flex items-center justify-between gap-2 text-sm"
                 >
                   <span className="truncate">{p.name}</span>
-                  <span className="font-mono tabular-nums">
-                    {formatMoney(totals.perPersonMinor[p.id] ?? 0, currency)}
+                  <span className={`font-mono tabular-nums${amt < 0 ? " text-destructive" : ""}`}>
+                    {formatMoney(amt, currency)}
                   </span>
                 </li>
-              ))}
+              )
+            })}
             </ul>
           )}
           {items.length > 0 ? (
@@ -123,7 +129,7 @@ function Breakdown() {
         const lines = items.flatMap((it) => {
           const alloc = totals.perItem.find((a) => a.itemId === it.id)
           const share = alloc?.perPersonMinor[p.id] ?? 0
-          if (share <= 0) return []
+          if (share === 0) return []
           return [
             <li
               key={`${p.id}-${it.id}`}
@@ -132,8 +138,9 @@ function Breakdown() {
               <span className="truncate">
                 {it.name}
                 {it.isShared ? " (shared)" : null}
+                {it.unitPriceMinor < 0 ? " (discount)" : null}
               </span>
-              <span className="font-mono tabular-nums">
+              <span className={`font-mono tabular-nums${share < 0 ? " text-destructive" : ""}`}>
                 {formatMoney(share, currency)}
               </span>
             </li>,
@@ -144,7 +151,7 @@ function Breakdown() {
           <div key={p.id} className="flex flex-col gap-0.5">
             <div className="flex items-center justify-between gap-2 text-sm font-medium">
               <span>{p.name}</span>
-              <span className="font-mono tabular-nums">
+              <span className={`font-mono tabular-nums${(totals.perPersonMinor[p.id] ?? 0) < 0 ? " text-destructive" : ""}`}>
                 {formatMoney(totals.perPersonMinor[p.id] ?? 0, currency)}
               </span>
             </div>

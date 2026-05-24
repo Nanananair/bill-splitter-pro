@@ -49,10 +49,15 @@ export function BillCardsMobile() {
                       (shared)
                     </span>
                   ) : null}
+                  {it.unitPriceMinor < 0 ? (
+                    <span className="ml-1 text-xs font-normal text-destructive">
+                      (discount)
+                    </span>
+                  ) : null}
                 </CardTitle>
                 <span className="font-mono text-xs text-muted-foreground tabular-nums">
                   {formatMoney(it.unitPriceMinor, currency)} ·{" "}
-                  <span className="text-foreground">
+                  <span className={(alloc?.lineTotalMinor ?? 0) < 0 ? "text-destructive" : "text-foreground"}>
                     {formatMoney(alloc?.lineTotalMinor ?? 0, currency)}
                   </span>
                 </span>
@@ -87,7 +92,7 @@ export function BillCardsMobile() {
                         />
                         <span className="truncate">{p.name}</span>
                       </span>
-                      <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                      <span className={`font-mono text-xs tabular-nums${personShare < 0 ? " text-destructive" : " text-muted-foreground"}`}>
                         {formatMoney(personShare, currency)}
                       </span>
                     </label>
@@ -145,7 +150,7 @@ export function BillCardsMobile() {
                         <Plus className="h-3 w-3" />
                       </Button>
                     </div>
-                    <span className="ml-1 w-16 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                    <span className={`ml-1 w-16 text-right font-mono text-xs tabular-nums${personShare < 0 ? " text-destructive" : " text-muted-foreground"}`}>
                       {formatMoney(personShare, currency)}
                     </span>
                   </div>

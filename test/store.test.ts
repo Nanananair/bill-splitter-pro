@@ -59,6 +59,35 @@ describe("useBillStore", () => {
     expect(sumPerPerson).toBe(totals.grandTotalMinor)
   })
 
+  describe("discount items (negative prices)", () => {
+    it("accepts a negative unit price", () => {
+      const s = useBillStore.getState()
+      s.addPerson("Alice")
+      const result = s.addItem({ name: "Coupon", unitPriceMinor: -500, isShared: true })
+      expect(result.ok).toBe(true)
+      expect(useBillStore.getState().items).toHaveLength(1)
+    })
+
+    it("rejects a zero unit price", () => {
+      const s = useBillStore.getState()
+      s.addPerson("Alice")
+      const result = s.addItem({ name: "Free", unitPriceMinor: 0, isShared: false })
+      expect(result.ok).toBe(false)
+    })
+
+    it("subtracts discount from grand total and per-person totals", () => {
+      const s = useBillStore.getState()
+      s.addPerson("Alice")
+      s.addPerson("Bob")
+      s.addItem({ name: "Pizza", unitPriceMinor: 2000, isShared: true })
+      s.addItem({ name: "Discount", unitPriceMinor: -400, isShared: true })
+      const totals = selectTotals(useBillStore.getState())
+      expect(totals.grandTotalMinor).toBe(1600)
+      const sum = Object.values(totals.perPersonMinor).reduce((a, b) => a + b, 0)
+      expect(sum).toBe(totals.grandTotalMinor)
+    })
+  })
+
   it("migrates legacy v1 persisted state to v2 minor units", () => {
     // Simulate what zustand persist would have written under v0/v1.
     const legacy = {
