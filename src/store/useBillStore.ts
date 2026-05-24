@@ -105,8 +105,8 @@ export const useBillStore = create<BillState>()(
       addItem: ({ name, unitPriceMinor, isShared }) => {
         const trimmed = name.trim()
         if (!trimmed) return { ok: false, error: "Item name cannot be empty." }
-        if (!Number.isFinite(unitPriceMinor) || unitPriceMinor <= 0) {
-          return { ok: false, error: "Price must be greater than zero." }
+        if (!Number.isFinite(unitPriceMinor) || unitPriceMinor === 0) {
+          return { ok: false, error: "Price cannot be zero." }
         }
         const item: Item = {
           id: uid(),
@@ -176,7 +176,7 @@ export const useBillStore = create<BillState>()(
         const newItems: Item[] = []
         for (const p of pendingReceiptItems) {
           const name = p.name.trim()
-          if (!name || !Number.isFinite(p.priceMinor) || p.priceMinor <= 0) continue
+          if (!name || !Number.isFinite(p.priceMinor) || p.priceMinor === 0) continue
           newItems.push({
             id: uid(),
             name,

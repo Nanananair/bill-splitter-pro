@@ -64,6 +64,9 @@ export function BillTableDesktop() {
                 {it.isShared ? (
                   <span className="ml-1 text-xs text-muted-foreground">(shared)</span>
                 ) : null}
+                {it.unitPriceMinor < 0 ? (
+                  <span className="ml-1 text-xs text-destructive">(discount)</span>
+                ) : null}
               </TableCell>
               <TableCell className="font-mono text-xs tabular-nums">
                 {formatMoney(it.unitPriceMinor, currency)}
@@ -104,7 +107,7 @@ export function BillTableDesktop() {
                   </TableCell>
                 )
               })}
-              <TableCell className="text-right font-mono tabular-nums">
+              <TableCell className={`text-right font-mono tabular-nums${(alloc?.lineTotalMinor ?? 0) < 0 ? " text-destructive" : ""}`}>
                 {formatMoney(alloc?.lineTotalMinor ?? 0, currency)}
               </TableCell>
               <TableCell>
@@ -125,14 +128,17 @@ export function BillTableDesktop() {
         <TableRow>
           <TableCell className="font-semibold">Total owed</TableCell>
           <TableCell />
-          {people.map((p) => (
-            <TableCell
-              key={p.id}
-              className="text-center font-mono font-semibold tabular-nums"
-            >
-              {formatMoney(totals.perPersonMinor[p.id] ?? 0, currency)}
-            </TableCell>
-          ))}
+          {people.map((p) => {
+            const amt = totals.perPersonMinor[p.id] ?? 0
+            return (
+              <TableCell
+                key={p.id}
+                className={`text-center font-mono font-semibold tabular-nums${amt < 0 ? " text-destructive" : ""}`}
+              >
+                {formatMoney(amt, currency)}
+              </TableCell>
+            )
+          })}
           <TableCell className="text-right font-mono font-semibold tabular-nums">
             {formatMoney(totals.grandTotalMinor, currency)}
           </TableCell>

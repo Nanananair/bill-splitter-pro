@@ -21,8 +21,8 @@ export function ItemEditor() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     const priceFloat = Number(price)
-    if (!Number.isFinite(priceFloat) || priceFloat <= 0) {
-      toast.error("Price must be greater than zero.")
+    if (!Number.isFinite(priceFloat) || priceFloat === 0) {
+      toast.error("Price cannot be zero.")
       return
     }
     const result = addItem({
@@ -61,7 +61,6 @@ export function ItemEditor() {
               id="item-price"
               type="number"
               inputMode="decimal"
-              min="0"
               step="0.01"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
