@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest"
 import { useBillStore } from "@/store/useBillStore"
-import { selectTotals } from "@/store/selectors"
+import {
+  selectBreakdown,
+  selectTotals,
+  selectUnassignedItems,
+} from "@/store/selectors"
+import type { PersonBreakdown } from "@/store/selectors"
+import type { Item } from "@/types"
+import { MILLI } from "@/lib/quantity"
 
 const reset = () => {
   useBillStore.setState({
@@ -25,11 +32,90 @@ describe("useBillStore", () => {
     const s = useBillStore.getState()
     s.addPerson("Alice")
     s.addItem({ name: "Pizza", unitPriceMinor: 1000, isShared: false })
+    s.addItem({ name: "Bread basket", unitPriceMinor: 500, isShared: true })
     s.addPerson("Bob")
-    const item = useBillStore.getState().items[0]!
+    const [pizza, bread] = useBillStore.getState().items as [Item, Item]
     const ids = useBillStore.getState().people.map((p) => p.id)
-    expect(item.quantitiesMilli[ids[0]!]).toBe(1000)
-    expect(item.quantitiesMilli[ids[1]!]).toBe(1000)
+    // Non-shared items start unassigned so assigning costs one tap per eater,
+    // not N taps to remove everyone who didn't have it.
+    expect(pizza.quantitiesMilli[ids[0]!]).toBe(0)
+    expect(pizza.quantitiesMilli[ids[1]!]).toBe(0)
+    // Shared items still default to everyone.
+    expect(bread.quantitiesMilli[ids[0]!]).toBe(1)
+    expect(bread.quantitiesMilli[ids[1]!]).toBe(1)
+  })
+
+  it("setAllQuantitiesMilli assigns or clears everyone in one write", () => {
+    const s = useBillStore.getState()
+    s.addPerson("Alice")
+    s.addPerson("Bob")
+    s.addItem({ name: "Chai", unitPriceMinor: 2000, isShared: false })
+    const itemId = useBillStore.getState().items[0]!.id
+    const ids = useBillStore.getState().people.map((p) => p.id)
+
+    useBillStore.getState().setAllQuantitiesMilli(itemId, MILLI)
+    let item = useBillStore.getState().items[0]!
+    expect(item.quantitiesMilli[ids[0]!]).toBe(MILLI)
+    expect(item.quantitiesMilli[ids[1]!]).toBe(MILLI)
+    expect(selectTotals(useBillStore.getState()).grandTotalMinor).toBe(4000)
+
+    useBillStore.getState().setAllQuantitiesMilli(itemId, 0)
+    item = useBillStore.getState().items[0]!
+    expect(Object.values(item.quantitiesMilli)).toEqual([0, 0])
+    expect(selectTotals(useBillStore.getState()).grandTotalMinor).toBe(0)
+  })
+
+  it("an unassigned non-shared item contributes nothing", () => {
+    const s = useBillStore.getState()
+    s.addPerson("Alice")
+    s.addPerson("Bob")
+    s.addItem({ name: "Fried rice", unitPriceMinor: 45900, isShared: false })
+    const totals = selectTotals(useBillStore.getState())
+    expect(totals.grandTotalMinor).toBe(0)
+    expect(Object.values(totals.perPersonMinor)).toEqual([0, 0])
+    expect(selectUnassignedItems(useBillStore.getState())).toHaveLength(1)
+  })
+
+  it("a shared item nobody is in allocates nothing to anybody", () => {
+    // Regression: all-zero weights made `allocateByQuantity` fall back to an
+    // even split, handing out money the (zero) line total didn't cover.
+    const s = useBillStore.getState()
+    s.addPerson("Alice")
+    s.addPerson("Bob")
+    s.addItem({ name: "Service", unitPriceMinor: 999, isShared: true })
+    const itemId = useBillStore.getState().items[0]!.id
+    const ids = useBillStore.getState().people.map((p) => p.id)
+    for (const id of ids) useBillStore.getState().toggleShared(itemId, id, false)
+
+    const totals = selectTotals(useBillStore.getState())
+    expect(totals.grandTotalMinor).toBe(0)
+    expect(Object.values(totals.perPersonMinor)).toEqual([0, 0])
+    const sum = Object.values(totals.perPersonMinor).reduce((a, b) => a + b, 0)
+    expect(sum).toBe(totals.grandTotalMinor)
+  })
+
+  it("selectBreakdown reports quantities alongside each person's share", () => {
+    const s = useBillStore.getState()
+    s.addPerson("Alice")
+    s.addPerson("Bob")
+    s.addItem({ name: "Fried rice", unitPriceMinor: 45900, isShared: false })
+    s.addItem({ name: "Bread", unitPriceMinor: 10000, isShared: true })
+    const riceId = useBillStore.getState().items[0]!.id
+    const aliceId = useBillStore.getState().people[0]!.id
+    useBillStore.getState().setQuantityMilli(riceId, aliceId, 2 * MILLI)
+
+    const [alice, bob] = selectBreakdown(useBillStore.getState()) as [
+      PersonBreakdown,
+      PersonBreakdown,
+    ]
+    expect(alice.lines.map((l) => [l.name, l.qtyMilli, l.shareMinor])).toEqual([
+      ["Fried rice", 2 * MILLI, 91800],
+      ["Bread", 1, 5000],
+    ])
+    expect(alice.totalMinor).toBe(96800)
+    // Bob had no rice, so it isn't in his breakdown at all.
+    expect(bob.lines.map((l) => l.name)).toEqual(["Bread"])
+    expect(bob.totalMinor).toBe(5000)
   })
 
   it("removing a person also strips their quantities from every item", () => {

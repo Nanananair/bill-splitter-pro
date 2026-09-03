@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { InstallButton } from "@/components/InstallButton"
 import { useTheme } from "@/components/ThemeProvider"
 import { useBillStore } from "@/store/useBillStore"
 
@@ -62,6 +63,7 @@ export function Header() {
           >
             <Trash2 />
           </Button>
+          <InstallButton />
           <Button
             type="button"
             variant="ghost"

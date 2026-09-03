@@ -6,7 +6,10 @@ Deployed as a single Vercel project: a Vite SPA served as static files, plus ser
 
 ## Features
 
+- **One-tap assignment.** Non-shared items start unassigned; tap a person's name to give them one, tap again to take it away. `-`/`+` step by a whole unit (type a decimal for halves), and **Everyone** / **Clear** assign or clear a whole item at once. Items nobody is on are flagged `Unassigned` so their money can't quietly go missing.
 - **Per-quantity and shared items.** Track "Alice had 1 beer, Bob had 3", or split a tax/appetizer evenly among included people. Anyone can opt out of a shared item.
+- **Shareable per-person summaries.** Each person in the breakdown has a share button that renders their itemised summary as a PNG card and opens the native share sheet — straight into WhatsApp. Falls back to sharing text, then to the clipboard, on browsers without file sharing.
+- **Installable (PWA).** Web manifest, icons, and a Workbox service worker: install to the home screen and keep splitting with no connection. Only receipt scanning needs the network.
 - **Receipt scanning.** Upload a photo; line items + currency are extracted via [OpenRouter](https://openrouter.ai) (default model: `google/gemini-2.5-flash`). Edit the result before adding to the bill.
 - **Multi-currency.** Detected from the receipt and overridable from the header. Amounts are formatted with `Intl.NumberFormat` and stored as integer minor units (paise/cents) — per-person sums always equal the displayed grand total.
 - **Persistence.** People, items, and currency are saved to `localStorage`; refreshing the tab won't lose your bill.
@@ -28,12 +31,14 @@ api/
   _lib/ratelimit.ts     Upstash sliding-window limiter
 src/
   components/           UI + feature components
-  store/                Zustand store + memoized selectors
-  lib/                  money math, currency, fetch helpers
+  store/                Zustand store + selectors (totals, per-person breakdown)
+  lib/                  money math, currency, quantities, share text + card, fetch helpers
   main.tsx, App.tsx
-test/                   Vitest specs (money, store, XSS, API)
+public/                 PWA icons (generated — see `npm run icons`)
+scripts/
+  generate-icons.mjs    draws the app icon; no image dependencies
+test/                   Vitest specs (money, store, quantity UX, share, XSS, API)
 index.html              Vite entry
-legacy.html             previous monolith (kept temporarily; remove at cutover)
 vercel.json             framework=vite, SPA rewrite to index.html
 ```
 
@@ -61,7 +66,8 @@ npm run dev:vite
 | --- | --- |
 | `npm run dev` | `vercel dev` — full stack, including `/api/*` |
 | `npm run dev:vite` | Vite alone, no serverless functions |
-| `npm run build` | TypeScript project build + Vite production build to `dist/` |
+| `npm run build` | TypeScript project build + Vite production build to `dist/` (emits the manifest and service worker) |
+| `npm run icons` | Regenerate `public/` icons from `scripts/generate-icons.mjs` |
 | `npm run preview` | Serve the production build locally |
 | `npm run lint` | ESLint on `src/`, `api/`, `test/` |
 | `npm run typecheck` | `tsc --noEmit` across all references |
@@ -97,6 +103,24 @@ Health check after deploy: `https://<your-deploy>.vercel.app/api/health` → `{ 
 - Every amount is stored as an integer in the currency's minor units (e.g. paise for INR, cents for USD, yen for JPY).
 - Even splits use the **largest-remainder** method: e.g. ₹100.01 split three ways becomes `[₹33.34, ₹33.34, ₹33.33]`. Sum = total, by construction.
 - Per-item allocations across people use the same method weighted by quantity, so the sum of per-person allocations always equals the line total — and therefore the sum of per-person totals always equals the grand total. There is no floating-point drift.
+
+## Sharing a person's summary
+
+`selectBreakdown` (`src/store/selectors.ts`) derives each person's lines — item, quantity, and their share — from the same `selectTotals` the UI renders, so the shared summary can never disagree with the screen.
+
+`src/lib/shareCard.ts` draws that into a PNG with the canvas 2D API (no DOM-rasterising dependency); the card is always dark so it looks the same in everyone's chat. `src/lib/share.ts` then degrades through three levels, so no browser is a dead end:
+
+1. `navigator.share({ files: [png] })` — the OS share sheet, with WhatsApp in it. Needs a secure context and a user gesture.
+2. `navigator.share({ text })` — text only, where file sharing isn't supported.
+3. `navigator.clipboard.writeText(text)` (then a hidden-textarea `execCommand` fallback) with a toast.
+
+A dismissed share sheet raises `AbortError` and is treated as a no-op, not an error.
+
+## PWA
+
+`vite-plugin-pwa` (`generateSW`) emits `manifest.webmanifest` and a Workbox service worker that precaches the built shell. `navigateFallbackDenylist` excludes `/api/`, so an offline receipt scan fails honestly instead of being answered with `index.html`. The header's install button uses `beforeinstallprompt` where it exists and points iOS Safari users at Share → *Add to Home Screen*.
+
+Icons are generated by `scripts/generate-icons.mjs`, which rasterises the mark and encodes PNGs using only Node's `zlib` — no ImageMagick, sharp, or canvas dependency. Edit the constants at the top of that file and run `npm run icons` to change the icon.
 
 ## Security model for `/api/parse-receipt`
 
