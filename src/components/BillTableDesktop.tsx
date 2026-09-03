@@ -12,7 +12,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { BulkAssign, UnassignedBadge, isUnassigned } from "@/components/ItemControls"
 import { formatMoney } from "@/lib/money"
+import { MILLI, formatQty } from "@/lib/quantity"
 
 export function BillTableDesktop() {
   const people = useBillStore((s) => s.people)
@@ -23,6 +25,7 @@ export function BillTableDesktop() {
   const toggleShared = useBillStore((s) => s.toggleShared)
 
   const totals = useBillStore(selectTotals)
+  const peopleIds = people.map((p) => p.id)
 
   if (people.length === 0) {
     return (
@@ -60,13 +63,17 @@ export function BillTableDesktop() {
           return (
             <TableRow key={it.id}>
               <TableCell className="font-medium">
-                {it.name}
-                {it.isShared ? (
-                  <span className="ml-1 text-xs text-muted-foreground">(shared)</span>
-                ) : null}
-                {it.unitPriceMinor < 0 ? (
-                  <span className="ml-1 text-xs text-destructive">(discount)</span>
-                ) : null}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span>{it.name}</span>
+                  {it.isShared ? (
+                    <span className="text-xs text-muted-foreground">(shared)</span>
+                  ) : null}
+                  {it.unitPriceMinor < 0 ? (
+                    <span className="text-xs text-destructive">(discount)</span>
+                  ) : null}
+                  {isUnassigned(it, peopleIds) ? <UnassignedBadge /> : null}
+                </div>
+                <BulkAssign item={it} />
               </TableCell>
               <TableCell className="font-mono text-xs tabular-nums">
                 {formatMoney(it.unitPriceMinor, currency)}
@@ -92,16 +99,16 @@ export function BillTableDesktop() {
                       type="number"
                       inputMode="decimal"
                       min="0"
-                      step="0.25"
-                      value={milli / 1000}
+                      step="1"
+                      value={formatQty(milli)}
                       onChange={(e) =>
                         setQuantityMilli(
                           it.id,
                           p.id,
-                          Math.max(0, Number(e.target.value) * 1000),
+                          Math.max(0, Number(e.target.value) * MILLI),
                         )
                       }
-                      className="mx-auto h-8 w-20 text-center"
+                      className={`mx-auto h-8 w-20 text-center${milli === 0 ? " text-muted-foreground" : ""}`}
                       aria-label={`${p.name} quantity of ${it.name}`}
                     />
                   </TableCell>

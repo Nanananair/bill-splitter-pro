@@ -1,5 +1,5 @@
 import type { BillState } from "./useBillStore"
-import type { Item, PersonId } from "@/types"
+import type { Item, Person, PersonId } from "@/types"
 import { allocateByQuantity } from "@/lib/money"
 
 export interface ItemAllocation {
@@ -26,6 +26,12 @@ function allocateForItem(
       const id = peopleIds[i]!
       if ((item.quantitiesMilli[id] ?? 0) > 0) includedIdx.push(i)
     }
+    if (includedIdx.length === 0) {
+      // Nobody is in. `allocateByQuantity` would fall back to an even split on
+      // all-zero weights, handing out money the line total (0) doesn't cover.
+      for (const id of peopleIds) perPerson[id] = 0
+      return { itemId: item.id, perPersonMinor: perPerson, lineTotalMinor: 0 }
+    }
     const allocations = allocateByQuantity(
       item.unitPriceMinor,
       peopleIds.map((_, i) => (includedIdx.includes(i) ? 1 : 0)),
@@ -36,7 +42,7 @@ function allocateForItem(
     return {
       itemId: item.id,
       perPersonMinor: perPerson,
-      lineTotalMinor: item.unitPriceMinor * (includedIdx.length > 0 ? 1 : 0),
+      lineTotalMinor: item.unitPriceMinor,
     }
   }
 
@@ -70,4 +76,61 @@ export function selectTotals(state: BillState): BillTotals {
     }
   }
   return { perPersonMinor, grandTotalMinor, perItem }
+}
+
+export interface PersonLine {
+  itemId: string
+  name: string
+  qtyMilli: number
+  isShared: boolean
+  isDiscount: boolean
+  shareMinor: number
+}
+
+export interface PersonBreakdown {
+  person: Person
+  lines: PersonLine[]
+  totalMinor: number
+}
+
+/**
+ * Per-person "what you had and what you owe", derived from `selectTotals`.
+ * Shared by the on-screen breakdown and the shareable summary card so the two
+ * can never disagree.
+ */
+export function selectBreakdown(state: BillState): PersonBreakdown[] {
+  const totals = selectTotals(state)
+  const allocById = new Map(totals.perItem.map((a) => [a.itemId, a]))
+  return state.people.map((person) => {
+    const lines: PersonLine[] = []
+    for (const item of state.items) {
+      const shareMinor = allocById.get(item.id)?.perPersonMinor[person.id] ?? 0
+      if (shareMinor === 0) continue
+      lines.push({
+        itemId: item.id,
+        name: item.name,
+        qtyMilli: item.quantitiesMilli[person.id] ?? 0,
+        isShared: item.isShared,
+        isDiscount: item.unitPriceMinor < 0,
+        shareMinor,
+      })
+    }
+    return {
+      person,
+      lines,
+      totalMinor: totals.perPersonMinor[person.id] ?? 0,
+    }
+  })
+}
+
+/**
+ * Non-shared items nobody has been assigned to. They contribute nothing to the
+ * grand total, so the UI has to surface them or money quietly goes missing.
+ */
+export function selectUnassignedItems(state: BillState) {
+  return state.items.filter(
+    (it) =>
+      !it.isShared &&
+      state.people.reduce((sum, p) => sum + (it.quantitiesMilli[p.id] ?? 0), 0) === 0,
+  )
 }

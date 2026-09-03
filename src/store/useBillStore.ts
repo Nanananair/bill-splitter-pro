@@ -9,6 +9,7 @@ import type {
   PersonId,
 } from "@/types"
 import { toMinor } from "@/lib/money"
+import { MILLI } from "@/lib/quantity"
 
 const DEFAULT_CURRENCY: CurrencyCode = "INR"
 
@@ -34,6 +35,7 @@ export interface BillState {
     { ok: boolean; error?: string }
   removeItem: (id: ItemId) => void
   setQuantityMilli: (itemId: ItemId, personId: PersonId, milli: number) => void
+  setAllQuantitiesMilli: (itemId: ItemId, milli: number) => void
   toggleShared: (itemId: ItemId, personId: PersonId, included: boolean) => void
 
   setCurrency: (code: CurrencyCode) => void
@@ -51,9 +53,12 @@ export interface BillState {
   clearAll: () => void
 }
 
+// Shared items default to "everyone is in"; non-shared items default to
+// unassigned (0) so adding an item costs one tap per person who actually had
+// it, instead of N taps to remove everyone who didn't.
 const initialQuantitiesFor = (people: Person[], isShared: boolean) =>
   Object.fromEntries(
-    people.map((p) => [p.id, isShared ? 1 : 1_000]),
+    people.map((p) => [p.id, isShared ? 1 : 0]),
   ) as Record<PersonId, number>
 
 export const useBillStore = create<BillState>()(
@@ -78,7 +83,7 @@ export const useBillStore = create<BillState>()(
             ...it,
             quantitiesMilli: {
               ...it.quantitiesMilli,
-              [newPerson.id]: it.isShared ? 1 : 1_000,
+              [newPerson.id]: it.isShared ? 1 : 0,
             },
           })),
         }))
@@ -132,6 +137,21 @@ export const useBillStore = create<BillState>()(
                     ...it.quantitiesMilli,
                     [personId]: Math.max(0, Math.round(milli)),
                   },
+                }
+              : it,
+          ),
+        })),
+
+      // Bulk "Everyone" / "Clear" — one store write instead of one per person.
+      setAllQuantitiesMilli: (itemId, milli) =>
+        set((s) => ({
+          items: s.items.map((it) =>
+            it.id === itemId
+              ? {
+                  ...it,
+                  quantitiesMilli: Object.fromEntries(
+                    s.people.map((p) => [p.id, Math.max(0, Math.round(milli))]),
+                  ),
                 }
               : it,
           ),
@@ -246,7 +266,7 @@ export const useBillStore = create<BillState>()(
             const id = nameToId.get(key) ?? key
             quantitiesMilli[id] = isShared
               ? qty > 0 ? 1 : 0
-              : Math.max(0, Math.round((qty ?? 0) * 1000))
+              : Math.max(0, Math.round((qty ?? 0) * MILLI))
           }
           return {
             id: it.id ?? uid(),

@@ -43,7 +43,9 @@ export function App() {
           <PeopleEditor />
           <ItemEditor />
         </aside>
-        <section className="rounded-md border bg-card p-3">
+        {/* min-w-0 keeps the table's min-content width from pushing the grid
+            (and the summary panel) past the container. */}
+        <section className="min-w-0 overflow-x-auto rounded-md border bg-card p-3">
           <BillTableDesktop />
         </section>
         <aside className="rounded-md border bg-card p-3">
